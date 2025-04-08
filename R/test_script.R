@@ -71,3 +71,16 @@ test3.2  <- llmPriorElicitSimple(context,
                                  max_tokens = 2000,
                                  update_key = FALSE,
                                  n_rep = 3)
+
+# calculate Beta-binomial parameters
+# These need to be estimated with much more repetitions 
+
+bb1.1 <- betaBinParameters(test1.1)
+bb1.2 <- betaBinParameters(test1.2)
+
+bb2.1 <- betaBinParameters(test2.1)
+bb2.2 <- betaBinParameters(test2.2)
+
+bb3.1 <- betaBinParameters(test3.1)
+bb3.2 <- betaBinParameters(test3.2)
+
