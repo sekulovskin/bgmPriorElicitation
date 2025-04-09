@@ -1,5 +1,7 @@
 # bgmPriorElicitation
 
+Many parts of the functions in this repository have been adapted from the R package theoraizer (https://github.com/MeikeWaaijers/theoraizer/)
+
 # `llmPriorElicit`
 
 This function evaluates conditional dependencies between variable pairs using an LLM, with permutation-based conditioning on remaining variables (but not their decided relations).
