@@ -42,10 +42,63 @@ estimate_beta_binomial <- function(x, n, method = c("mle", "mom"), force_mom = F
     alpha_mle <- exp(fit$par[1])
     beta_mle  <- exp(fit$par[2])
     
-    return(list(method = "mle", alpha = alpha_mle, beta = beta_mle))
+    return(list(method = method, alpha = alpha_mle, beta = beta_mle))
   }
 }
 
+
+# function from Giuseppe: 
+
+#estimate_beta_binomial <- function(x,MLE=TRUE){
+#  mean_x <- mean(x)
+#  var_x <- var(x)
+#  mm_x <- ((mean_x*(1-mean_x))/var_x)-1
+#  alpha <- mean_x*mm_x
+#  beta <- (1-mean_x)*mm_x
+#  
+#  beta_deriv <- function(pars,data){
+#    m <- length(data)
+#    sum_log_x <- sum(log(data))
+#    sum_log_1_x <- sum(log(1-data))
+#    alpha <- pars[1]
+#    beta <- pars[2]
+#    
+#    # value of the loglikelihood calculated at pars
+#    value <- (alpha-1)*sum_log_x + (beta-1)*sum_log_1_x-m*lbeta(alpha,beta)
+#    
+#    # digamma and trigamma functions used in first and second derivatives
+#    psi_alpha <- digamma(alpha)
+#    psi_beta <- digamma(beta)
+#    psi_ab <- digamma(alpha + beta)
+#    trigamma_alpha <- trigamma(alpha)
+#    trigamma_beta <- trigamma(beta)
+#    trigamma_ab <- trigamma(alpha + beta)
+#    
+#    # Score function
+#    gradient <- rep(0.0,2)
+#    gradient[1] <- sum_log_x - m * (psi_alpha - psi_ab)
+#    gradient[2] <- sum_log_1_x - m * (psi_beta - psi_ab)
+#    
+#    # Hessian matrix
+#    hessian <- matrix(0.0,2,2)
+#    hessian[1,1] <- -m * (trigamma_alpha - trigamma_ab)
+#    hessian[2,2] <- -m * (trigamma_beta - trigamma_ab)
+#    hessian[1,2] <- -m * (-trigamma_ab)
+#    hessian[2,1] <- hessian[1,2]
+#    
+#    return(list(value = -value, gradient = -gradient, hessian = -hessian)) # return negative because negative loglikelihood
+#  } 
+#  
+#  mle <- c(NA,NA)
+#  if(MLE){
+#    opt <- trust::trust(objfun = beta_deriv, parinit = c(alpha,beta), data = x, rinit = 0.1, rmax = 10.0) # starting at the MM
+#    mle <- opt$argument
+#  }
+#  
+#  return(rbind(c(alphaMM = alpha,betaMM = beta),c(alphaMLE = mle[1],betaMLE=mle[2])))
+#}
+#
+#
 
 # Calculate the beta-binomial parameters for the llm object
 library(dplyr)
@@ -67,7 +120,7 @@ betaBinParameters <- function(llmobject,
   # check the class of the llm object
   if (inherits(llmobject, "llmPriorElicit") ||
       inherits(llmobject, "llmPriorElicitSimple")) {
-   df <- llmobject$raw_LLM
+    df <- llmobject$raw_LLM
     sum_ones_vector <- df %>%
       group_by(iteration) %>%
       summarize(sum_ones = sum(ifelse(content == "I", 1, 0))) %>%
@@ -94,6 +147,5 @@ betaBinParameters <- function(llmobject,
     beta = bb$beta
   ))
 }  # end of function 
-
 
 

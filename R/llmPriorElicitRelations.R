@@ -28,16 +28,28 @@ llmPriorElicitRelations <- function(context,
     stop("The number of variables should be at least 3.")
   }
   # messages with permutations
+  
+  # Generate all unique combinations
+  pairs_df <- data.frame(var1 = character(), var2 = character())
+  for(i in 1:(length(variable_list)-1)) {
+    for(j in (i+1):length(variable_list)) {
+      pairs_df <- rbind(pairs_df, data.frame(var1 = variable_list[[i]], var2 = variable_list[[j]]))
+    }
+  }
+  
+  n_pairs <- nrow(pairs_df)
+  
   if (missing(n_perm)) {
-    n_perm <- factorial(length(variable_list))  # Default to all permutations
-    if (length(variable_list) >= 4) {
+    n_perm <- factorial(n_pairs) 
+    if (n_pairs >= 4) {  # check why it does not print the warning!! 
       message(
         "n_perm not specified. Generating all ", n_perm, " permutations of variable pairs.\n", "This may be slow for large number of variables. Specify `n_perm` to limit the number."
       )
     }
   }
   
-  if (n_perm > factorial(length(variable_list))) {
+  # if the supplied exceeds the number of possible permutations 
+  if (n_perm > factorial(n_pairs)) {
     stop(
       "Requested `n_perm` (", n_perm, ") exceeds maximum possible permutations (", factorial(length(variable_list)), ").\n", "Reduce `n_perm` or set to NULL."
     )
@@ -64,15 +76,6 @@ llmPriorElicitRelations <- function(context,
   logprobs_LLM <- list()
   prob_relation_df <- NULL
   
-  # Generate all unique combinations
-  pairs_df <- data.frame(var1 = character(), var2 = character())
-  for(i in 1:(length(variable_list)-1)) {
-    for(j in (i+1):length(variable_list)) {
-      pairs_df <- rbind(pairs_df, data.frame(var1 = variable_list[[i]], var2 = variable_list[[j]]))
-    }
-  }
-  
-  n_pairs <- nrow(pairs_df)
   
   # Generate permutations of pairs order
   perms <- gtools::permutations(n_pairs, n_pairs)

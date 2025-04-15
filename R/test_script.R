@@ -12,6 +12,8 @@ source("llmPriorElicitSimple.R")  # function that only evaluates the marginal re
                                   # mentions that these are conditional associations and that it should take into
                                   # account any possible remaining variables that could influence the association
 
+source("betaBinParameters.R") # function that calculates the beta-binomial parameters for the llm object
+
 
 # Example
 
@@ -46,7 +48,7 @@ test2.1  <- llmPriorElicitRelations(NULL,
                                     LLM_model = "gpt-4o",
                                     max_tokens = 2000,
                                     update_key = FALSE,
-                                    n_perm = 2)
+                                    n_perm = 20)
 
 test2.2  <- llmPriorElicitRelations(context,
                                     variable_list,
