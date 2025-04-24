@@ -37,7 +37,7 @@
 #' }
 #'
 #' @import dplyr
-#' @import stringr   FixHub Bakkerstraat 15 3511
+#' @import stringr    # this will make sense when we turn it into a package 
 #' @export
 
 # Calculate the beta-binomial parameters for the llm object

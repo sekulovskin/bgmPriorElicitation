@@ -48,7 +48,7 @@
 #' print(result$relation_df)
 #' }
 #'
-#' @import gtools   FixHub Bakkerstraat 15 3511
+#' @import gtools   # this will make sense when we turn it into a package 
 #' @export
 
 
