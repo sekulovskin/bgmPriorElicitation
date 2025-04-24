@@ -1,5 +1,56 @@
-# source the helper functions
-source("helper_functions.R")
+#' Elicit Prior Edge Inclusion Probabilities Using an LLM
+#' by explicitly taking into account the LLMs decision for the remaining 
+#' variables
+#'
+#' This function queries a large language model (LLM) to elicit prior probabilites
+#' about conditional associations (edges) between variable pairs in a Markov random field,
+#' given optional context and permutations of variable pair order.
+#' 
+#' The function iteratively evaluates each variable pair, updating a decision context
+#' that is passed to the LLM to consider previous decisions. It returns edge probabilities
+#' averaged across sampled permutations of pair orders.
+#'
+#' @param context Optional character string providing background information or study context 
+#'   to be incorporated into the LLM prompt. Defaults to `NULL`.
+#' @param variable_list A character vector of variable names. Must contain at least three variables.
+#' @param LLM_model Character string indicating which LLM to use. Options include: 
+#'   `"gpt-4o"`, `"gpt-4"`, `"gpt-4-turbo"`, `"gpt-3.5-turbo"`, `"mixtral"`, or `"llama-3"`.
+#' @param max_tokens Integer specifying the maximum number of tokens to generate. 
+#'   The allowed maximum varies by model: 6000 for GPT-4 variants, 3000 for GPT-3.5.
+#' @param update_key Logical. If `TRUE`, updates the API key used for the LLM call. 
+#'   Only the first call will use the updated key. Default is `FALSE`.
+#' @param n_perm Integer or `NULL`. Number of random permutations of pair orders to evaluate. 
+#'   If `NULL`, all permutations are used (can be slow for large variable sets).
+#' @param seed Integer. Random seed for permutation reproducibility. Default is `123`.
+#' @param prompt_specs Optional list containing user/system prompt overrides. Each entry must 
+#'   contain `user` and `system` strings. If `NULL`, a default network prompt is used.
+#'
+#' @return A list of class `"llmPriorElicitRelations"` with the following elements:
+#' \describe{
+#'   \item{`relation_df`}{A data frame with columns `var1`, `var2`, and `prob`, representing
+#'     the prior probability of a conditional association between variable pairs.}
+#'   \item{`raw_LLM`}{A data frame with raw responses and prompt metadata for each pair across permutations.}
+#'   \item{`arguments`}{A list with the function call arguments for reproducibility.}
+#' }
+#'
+#' @details
+#' Each pair is evaluated in the context of previously judged pairs, based on the current permutation.
+#' The returned probabilities are averaged across permutations.
+#'
+#' @examples
+#' \dontrun{
+#' result <- llmPriorElicitRelations(
+#'   context = "This study investigates the relationship between anxiety, sleep, and concentration.",
+#'   variable_list = c("Anxiety", "Sleep", "Concentration"),
+#'   LLM_model = "gpt-4o",
+#'   n_perm = 10
+#' )
+#' print(result$relation_df)
+#' }
+#'
+#' @import gtools   FixHub Bakkerstraat 15 3511
+#' @export
+
 
 llmPriorElicitRelations <- function(context,
                                     variable_list,
@@ -7,7 +58,8 @@ llmPriorElicitRelations <- function(context,
                                     max_tokens = 2000,
                                     update_key = FALSE,
                                     n_perm = NULL,
-                                    seed = 123) {
+                                    seed = 123,
+                                    prompt_specs = NULL) {
   
   # Validate input (same as original)
   stopifnot("'context' should be a character string or NULL." = is.character(context) | is.null(context))
@@ -55,6 +107,25 @@ llmPriorElicitRelations <- function(context,
     )
   }
   # Define the prompts (modified to include previous decisions)
+  
+  if (!is.null(prompt_specs)) {
+    # ensure at least two rows
+    specs <- prompt_specs
+    if (length(specs) == 1) specs <- rep(specs, 2)
+    
+    bern_prompts <- do.call(rbind, lapply(specs, function(spec) {
+      data.frame(
+        Function            = "bernoulli",
+        Function.Part       = "bernoulli",
+        context             = if (grepl("\\(context\\)", spec$user)) "y" else "n",
+        Variation.Prompt    = "override",
+        Variation.Sys.Prompt= "override",
+        Prompt              = spec$user,
+        Sys.Prompt          = spec$system,
+        stringsAsFactors    = FALSE
+      )
+    }))
+  } else {
   bern_prompts <- data.frame(
     Function = rep("bernoulli", 2),
     Function.Part = rep("bernoulli", 2),
@@ -70,7 +141,7 @@ llmPriorElicitRelations <- function(context,
     ),
     Sys.Prompt = rep("You are an expert in using graphical models to study psychological constructs. You will be asked to classify whether there is a conditional relationship between pairs of variables in a Markov random field grapical model, applied to psychological research. You must use your vast prior knowledge of the relationships between the variables to make informed decisions. Evaluate conditional associations between variable pairs in sequence, considering all previous decisions. For each pair, output 'I' if there's a direct association after accounting for other variables, or 'E' if the association is explained by other variables. Only output 'I' or 'E' with no additional text.", 2)
   )
-  
+ }
   # Initialize output objects
   raw_LLM <- list()
   logprobs_LLM <- list()

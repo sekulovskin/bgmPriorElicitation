@@ -1,57 +1,44 @@
-# function to estimate beta-binomial parameters
-
-estimate_beta_binomial <- function(x, n, method = c("mle", "mom"), force_mom = FALSE) {
-  if (any(x < 0) || any(x > n)) {
-    stop("All values of x must be between 0 and n.")
-  }
-  
-  # alpha and beta estimated using method of moments (mom)
-  m1 <- mean(x)/n
-  m2 <- mean(x^2)/n
-  denominator <- (n*(m2/m1-m1-1)+m1)
-  alpha <- (n*m1-m2)/denominator
-  beta <- ((n-m1)*(n-m2/m1))/denominator
-  init <- c(0,0)
-  if (alpha <= 0 || beta <= 0) {
-    warning("Invalid MoM estimates (possibly due to low variance). Falling back to MLE.")
-    init <- log(c(mean(x) + 1, n - mean(x) + 1))  # reasonable starting point
-  }
-  else{
-    init <- log(c(alpha,beta))
-  }
-  
-  # negative loglikelihood
-  beta_binom_fun <- function(pars,x,n){
-    alpha <- exp(pars[1])
-    beta <- exp(pars[2])
-    
-    # value of the loglikelihood calculated at pars (excluding log(choose(n,x))
-    value <- sum(lgamma(x+alpha)+lgamma(n-x+beta)-lgamma(n+alpha+beta)-lgamma(alpha)-lgamma(beta)+lgamma(alpha+beta))
-    
-    # digamma and trigamma functions used in first and second 
-    # perhaps computing them once here and then use them later?
-
-    # Score function
-    gradient <- rep(0.0,2)
-    gradient[1] <- sum(digamma(x+alpha) - digamma(n+alpha+beta) - digamma(alpha) + digamma(alpha+beta))
-    gradient[2] <- sum(digamma(n-x+beta) - digamma(n+alpha+beta) - digamma(beta) + digamma(alpha+beta))
-    
-    # Hessian matrix
-    hessian <- matrix(0.0,2,2)
-    hessian[1,1] <- sum(trigamma(x+alpha) - trigamma(n+alpha+beta) - trigamma(alpha) + trigamma(alpha+beta))
-    hessian[2,2] <- sum(trigamma(n-x+beta) - trigamma(n+alpha+beta) - trigamma(beta) + trigamma(alpha+beta))
-    hessian[1,2] <- sum(trigamma(alpha+beta) - trigamma(n+alpha+beta))
-    hessian[2,1] <- hessian[1,2]
-    
-    return(list(value = -value, gradient = -gradient, hessian = -hessian)) # return negative because negative loglikelihood
-  }
-
-  fit <- trust::trust(objfun = beta_binom_fun, parinit = init, x = x, n = n, rinit = 0.1, rmax = 10.0)
-  alpha_mle <- exp(fit$argument[1])
-  beta_mle  <- exp(fit$argument[2])
-    
-  return(list(mle = c("alpha" = alpha_mle, "beta" = beta_mle), mom = c("alpha" = alpha, "beta" = beta)))
-}
+#' Estimate Beta-Binomial Parameters from LLM Output
+#'
+#' This function computes the parameters of a Beta-Binomial distribution from the edge
+#' inclusion outputs of an LLM-based prior elicitation object. The estimated parameters
+#' describe the distribution of edge counts across permutations or repetitions.
+#'
+#' @param llmobject An object of class `"llmPriorElicit"`, `"llmPriorElicitSimple"`, or 
+#'   `"llmPriorElicitRelations"` as returned by LLM-based prior elicitation functions.
+#' @param method Estimation method. One of `"mle"` (maximum likelihood) or `"mom"` (method of moments).
+#'   Default is `"mle"`.
+#' @param force_mom Logical. If `TRUE`, forces method of moments estimation even if `"mle"` is requested.
+#'   Default is `FALSE`.
+#'
+#' @return A list containing the estimated `alpha` and `beta` parameters of the Beta-Binomial distribution.
+#'
+#' @details
+#' The function extracts the number of included edges (`"I"`) for each permutation or repetition
+#' from the LLM output and fits a Beta-Binomial distribution to these counts. This gives a probabilistic
+#' description of edge inclusion uncertainty across network realizations.
+#'
+#' For `llmPriorElicit` and `llmPriorElicitSimple` objects, edge inclusion is determined from
+#' the raw content per iteration. For `llmPriorElicitRelations` objects, edge inclusion is extracted
+#' from the full I/E sequence in the final output for each permutation.
+#'
+#' A warning is issued if fewer than 10 permutations are detected, as parameter estimation
+#' may be unreliable in such cases.
+#'
+#' @examples
+#' \dontrun{
+#' llm_out <- llmPriorElicitSimple(
+#'   context = "Exploring cognitive symptoms and mood in depression",
+#'   variable_list = c("Concentration", "Sadness", "Sleep"),
+#'   n_rep = 3
+#' )
+#' beta_params <- betaBinParameters(llm_out)
+#' print(beta_params)
+#' }
+#'
+#' @import dplyr
+#' @import stringr   FixHub Bakkerstraat 15 3511
+#' @export
 
 # Calculate the beta-binomial parameters for the llm object
 library(dplyr)

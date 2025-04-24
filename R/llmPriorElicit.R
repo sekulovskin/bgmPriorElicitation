@@ -1,6 +1,51 @@
-# source the helper functions
-# A function that prompts an LLM to evaluate whther edges between 
-source("helper_functions.R")
+#' Elicit Edge Inclusion Priors for Variable Pairs Using an LLM
+#' that takes into account the remaining variables
+#' 
+#' 
+#' This function uses a large language model (LLM) to evaluate whether conditional
+#' associations (edges) exist between variable pairs in a graphical model. It optionally
+#' includes study context and considers different orderings of remaining variables in the network
+#' to estimate the prior probability of edge inclusion.
+#'
+#' @param context Optional character string. Describes the research context to inform the LLM's evaluation.
+#' @param variable_list A character vector with at least three variable names.
+#' @param LLM_model A character string specifying the model to use. One of: `"gpt-4o"`, `"gpt-4"`, `"gpt-4-turbo"`,
+#'   `"gpt-3.5-turbo"`, `"mixtral"`, or `"llama-3"`.
+#' @param max_tokens Integer. The maximum number of tokens the LLM can generate. Maximum depends on the selected model.
+#' @param update_key Logical. If `TRUE`, updates the OpenAI API key once. Default is `FALSE`.
+#' @param n_perm Optional integer. Number of sampled permutations of remaining variables. Ignored for small sets.
+#' @param seed Integer. Random seed for reproducibility. Default is `123`.
+#' @param prompt_specs Optional list of user/system prompt overrides. Must contain `user` and `system` strings.
+#'
+#' @return A list of class `"llmPriorElicit"` containing:
+#' \describe{
+#'   \item{`relation_df`}{A data frame with columns `var1`, `var2`, and `prob`, containing the estimated
+#'     prior probabilities of conditional associations between variable pairs.}
+#'   \item{`raw_LLM`}{A data frame of all raw LLM prompt-response data and token probabilities.}
+#'   \item{`arguments`}{A list of the function input arguments for reproducibility.}
+#' }
+#'
+#' @details
+#' The function examines all unique variable pairs and, for each, prompts the LLM
+#' to assess the presence of a conditional association, factoring in remaining variables in different
+#' permutations. If context is provided, it is included in the prompt to inform decisions.
+#'
+#' The returned edge inclusion probability reflects the average over all considered permutations
+#' for each variable pair. The function handles both default and user-specified prompting structures.
+#'
+#' @examples
+#' \dontrun{
+#' result <- llmPriorElicit(
+#'   context = "This study examines the relationship between screen time, physical activity, and cardiovascular health.",
+#'   variable_list = c("Screen Time", "Physical Activity", "Cardiovascular Health"),
+#'   LLM_model = "gpt-4o"
+#' )
+#' print(result$relation_df)
+#' }
+#'
+#' @import gtools  # this will make sense when we turn it into a package 
+#' @export
+
 
 llmPriorElicit <- function(context,
                            variable_list,
@@ -8,7 +53,8 @@ llmPriorElicit <- function(context,
                            max_tokens = 2000,
                            update_key = FALSE,
                            n_perm = NULL,
-                           seed = 123) {
+                           seed = 123,
+                           prompt_specs = NULL) {
   
   # Validate input
   stopifnot("'context' should be a character string or NULL." = is.character(context) | is.null(context))
@@ -39,6 +85,25 @@ llmPriorElicit <- function(context,
   if (!missing(n_perm) && length(variable_list) == 4) {
     message("Ignoring n_perm: Generating all 2 permutations since there are only 2 remaining variables.")
   }
+  
+  if (!is.null(prompt_specs)) {
+    # ensure at least two rows
+    specs <- prompt_specs
+    if (length(specs) == 1) specs <- rep(specs, 2)
+    
+    bern_prompts <- do.call(rbind, lapply(specs, function(spec) {
+      data.frame(
+        Function            = "bernoulli",
+        Function.Part       = "bernoulli",
+        context             = if (grepl("\\(context\\)", spec$user)) "y" else "n",
+        Variation.Prompt    = "override",
+        Variation.Sys.Prompt= "override",
+        Prompt              = spec$user,
+        Sys.Prompt          = spec$system,
+        stringsAsFactors    = FALSE
+      )
+    }))
+  } else {
   # Define the prompts within the function (only second and fourth prompts)
   bern_prompts <- data.frame(
     Function = rep("bernoulli", 2),  # Only 2 prompts now
@@ -53,6 +118,7 @@ llmPriorElicit <- function(context,
     ),
     Sys.Prompt = rep("You are an expert in using graphical models to study psychological constructs. You will be asked to classify whether there is a conditional relationship between pairs of variables in a Markov random field graphical model, applied to psychological research. You must use your vast prior knowledge of the relationships between the variables to make informed decisions. When presented with two variable names, you should evaluate whether or not there is an edge between those two variables in the graphical model (which reflects a conditional association) between them after taking into account the remaining variables. If there is a conditional association between two variables, then the edge should be categorized as included (by outputting 'I'). If there is no conditional association, then the edge should be categorized as excluded (by outputting 'E'). Therefore, output should be either 'I' or 'E'! Do not include any additional explanation or other text. Since you must make decisions about conditional associations, be sure to consider the remaining variables when making your decision.", 2)
   )
+  }
   # Create objects for tryCatch output
   raw_LLM <- NULL
   raw_LLM_prompt <- NULL
