@@ -21,7 +21,6 @@
 #'   Only the first call will use the updated key. Default is `FALSE`.
 #' @param n_perm Integer or `NULL`. Number of random permutations of pair orders to evaluate. 
 #'   If `NULL`, all permutations are used (can be slow for large variable sets).
-#' @param seed Integer. Random seed for permutation reproducibility. Default is `123`.
 #' @param prompt_specs Optional list containing user/system prompt overrides. Each entry must 
 #'   contain `user` and `system` strings. If `NULL`, a default network prompt is used.
 #'
@@ -48,7 +47,6 @@
 #' print(result$relation_df)
 #' }
 #'
-#' @import gtools   # this will make sense when we turn it into a package 
 #' @export
 
 
@@ -58,30 +56,37 @@ llmPriorElicitRelations <- function(context,
                                     max_tokens = 2000,
                                     update_key = FALSE,
                                     n_perm = NULL,
-                                    seed = 123,
                                     prompt_specs = NULL) {
   
-  # Validate input (same as original)
+  # Validate arguments --------------------------------------------------------
   stopifnot("'context' should be a character string or NULL." = is.character(context) | is.null(context))
-  stopifnot("'variable_list' should be a vector containing more than one variables." = is.vector(variable_list) && length(variable_list) > 1)
+  stopifnot("'variable_list' should be a vector containing at least 3 variables." = is.vector(variable_list) && length(variable_list) >= 3)
   stopifnot("All entries in 'variable_list' should be character strings." =
               all(sapply(variable_list, is.character)))
-  stopifnot("'LLM_model' should be 'gpt-4o', 'gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo', 'mixtral', or 'llama-3'." =
-              LLM_model %in% c("mixtral", "gpt-4o", "gpt-4", "gpt-4-turbo", "gpt-3.5-turbo", "llama-3"))
-  stopifnot("For 'gpt-4o', 'max_tokens' should be a whole number above 0, and not higher than 6000." =
-              !(LLM_model == "gpt-4o") || (is.numeric(max_tokens) && max_tokens == floor(max_tokens) && max_tokens >= 0 && max_tokens <= 6000))
-  stopifnot("For 'gpt-4', 'max_tokens' should be a whole number above 0, and not higher than 6000." =
-              !(LLM_model == "gpt-4") || (is.numeric(max_tokens) && max_tokens == floor(max_tokens) && max_tokens >= 0 && max_tokens <= 6000))
-  stopifnot("For 'gpt-4-turbo', 'max_tokens' should be a whole number above 0, and not higher than 6000." =
-              !(LLM_model == "gpt-4-turbo") || (is.numeric(max_tokens) && max_tokens == floor(max_tokens) && max_tokens >= 0 && max_tokens <= 6000))
-  stopifnot("For 'gpt-3.5-turbo', 'max_tokens' should be a whole number above 0, and not higher than 3000." =
-              !(LLM_model == "gpt-3.5-turbo") || (is.numeric(max_tokens) && max_tokens == floor(max_tokens) && max_tokens >= 0 && max_tokens <= 3000))
-  if (length(variable_list) < 3) {
-    stop("The number of variables should be at least 3.")
-  }
-  # messages with permutations
   
-  # Generate all unique combinations
+  
+  # Define maximum token limits for each model
+  max_token_limits <- list(
+    "gpt-4o" = 4096,
+    "gpt-4-turbo" = 4096,
+    "gpt-3.5-turbo" = 4096,
+    "mixtral" = 4096,
+    "llama-3" = 2048
+  )
+  
+  # Validate 'max_tokens' based on the selected model
+  if (!is.null(max_tokens)) {
+    max_limit <- max_token_limits[[LLM_model]]
+    if (is.null(max_limit)) {
+      stop(paste("Unsupported model:", LLM_model))
+    }
+    if (!is.numeric(max_tokens) || max_tokens <= 0 || max_tokens > max_limit) {
+      stop(paste0("For '", LLM_model, "', 'max_tokens' should be a whole number above 0 and not higher than ", max_limit, "."))
+    }
+  }
+  
+  # permutations --------------------------------------------------------------
+  # define all the possible edges 
   pairs_df <- data.frame(var1 = character(), var2 = character())
   for(i in 1:(length(variable_list)-1)) {
     for(j in (i+1):length(variable_list)) {
@@ -89,27 +94,35 @@ llmPriorElicitRelations <- function(context,
     }
   }
   
-  n_pairs <- nrow(pairs_df)
+  # number of possible edges (p choose 2)
+  n_pairs <- nrow(pairs_df)  
   
   if (missing(n_perm)) {
-    n_perm <- factorial(n_pairs) 
-    if (n_pairs >= 4) {  # check why it does not print the warning!! 
+    n_perm <- 2 # generate two permutations by default
       message(
-        "n_perm not specified. Generating all ", n_perm, " permutations of variable pairs.\n", "This may be slow for large number of variables. Specify `n_perm` to limit the number."
+        "The n_perm argument was not specified. The function will proceed using two permutations of the variable pair order."
       )
-    }
   }
   
-  # if the supplied exceeds the number of possible permutations 
-  if (n_perm > factorial(n_pairs)) {
+  # if n_perm is zero 
+  if (!missing(n_perm) && n_perm == 0) {
+    stop("n_perm cannot be zero. Please provide a positive integer up to 50 or set to NULL.")
+  }
+
+  # we will cap the number of possible permutations to 50 
+  if (n_perm > 50) {
     stop(
-      "Requested `n_perm` (", n_perm, ") exceeds maximum possible permutations (", factorial(length(variable_list)), ").\n", "Reduce `n_perm` or set to NULL."
+      "Requested `n_perm` (", n_perm, ") exceeds maximum possible permutations which is set to 50. Reduce `n_perm` or set to NULL."
     )
   }
-  # Define the prompts (modified to include previous decisions)
-  
-  if (!is.null(prompt_specs)) {
-    # ensure at least two rows
+  # for no_variable_list > 4, n_perm must be equal to or smaller than n_pairs!
+  if (length(variable_list) <= 4 && n_perm > factorial(n_pairs)) {
+    stop(
+      "Requested `n_perm` (", n_perm, ") exceeds the maximum possible permutations (", factorial(n_pairs), ") for the provided number of variables. Reduce `n_perm` or set to NULL."
+    )
+  }
+  # Define the prompts  --------------------------------------------------------
+  if (!is.null(prompt_specs)) {  # In case the user wants to override the default prompts
     specs <- prompt_specs
     if (length(specs) == 1) specs <- rep(specs, 2)
     
@@ -126,6 +139,7 @@ llmPriorElicitRelations <- function(context,
       )
     }))
   } else {
+    
   bern_prompts <- data.frame(
     Function = rep("bernoulli", 2),
     Function.Part = rep("bernoulli", 2),
@@ -147,14 +161,9 @@ llmPriorElicitRelations <- function(context,
   logprobs_LLM <- list()
   prob_relation_df <- NULL
   
-  
-  # Generate permutations of pairs order
-  perms <- gtools::permutations(n_pairs, n_pairs)
-  # sample rows from perms
-  set.seed(seed) # For reproducibility
-  # Randomly sample n_perm rows from perms
-  perms <- perms[sample(1:nrow(perms), n_perm), ]
-  
+  # create n_perm permutation of the variable pairs 
+  perms <- t(replicate(n_perm, sample(1:n_pairs, n_pairs), simplify = TRUE))
+
   # Main evaluation loop - now over permutations
   for (perm_idx in 1:n_perm) {
     current_order <- perms[perm_idx, ]
@@ -386,8 +395,7 @@ llmPriorElicitRelations <- function(context,
     LLM_model = LLM_model,
     max_tokens = max_tokens,
     update_key = update_key,
-    n_perm = n_perm,
-    seed = seed
+    n_perm = n_perm
   )
 
   if (length(output) == 0) {

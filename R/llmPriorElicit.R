@@ -55,39 +55,59 @@ llmPriorElicit <- function(context,
                            n_perm = NULL,
                            seed = 123,
                            prompt_specs = NULL) {
-  
-  # Validate input
+  # Validate arguments --------------------------------------------------------
   stopifnot("'context' should be a character string or NULL." = is.character(context) | is.null(context))
-  stopifnot("'variable_list' should be a vector containing more than one variables." = is.vector(variable_list) && length(variable_list) > 1)
+  stopifnot("'variable_list' should be a vector containing at least 3 variables." = is.vector(variable_list) && length(variable_list) >= 3)
   stopifnot("All entries in 'variable_list' should be character strings." =
               all(sapply(variable_list, is.character)))
-  stopifnot("'LLM_model' should be 'gpt-4o', 'gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo', 'mixtral', or 'llama-3'." =
-              LLM_model %in% c("mixtral", "gpt-4o", "gpt-4", "gpt-4-turbo", "gpt-3.5-turbo", "llama-3"))
-  stopifnot("For 'gpt-4o', 'max_tokens' should be a whole number above 0, and not higher than 6000." =
-              !(LLM_model == "gpt-4o") || (is.numeric(max_tokens) && max_tokens == floor(max_tokens) && max_tokens >= 0 && max_tokens <= 6000))
-  stopifnot("For 'gpt-4', 'max_tokens' should be a whole number above 0, and not higher than 6000." =
-              !(LLM_model == "gpt-4") || (is.numeric(max_tokens) && max_tokens == floor(max_tokens) && max_tokens >= 0 && max_tokens <= 6000))
-  stopifnot("For 'gpt-4-turbo', 'max_tokens' should be a whole number above 0, and not higher than 6000." =
-              !(LLM_model == "gpt-4-turbo") || (is.numeric(max_tokens) && max_tokens == floor(max_tokens) && max_tokens >= 0 && max_tokens <= 6000))
-  stopifnot("For 'gpt-3.5-turbo', 'max_tokens' should be a whole number above 0, and not higher than 3000." =
-              !(LLM_model == "gpt-3.5-turbo") || (is.numeric(max_tokens) && max_tokens == floor(max_tokens) && max_tokens >= 0 && max_tokens <= 3000))
-  # stop the function if the legnth of variable_list is < 3
-  if (length(variable_list) < 3) {
-    stop("The number of variables should be at least 3.")
+  
+  
+  # Define maximum token limits for each model
+  max_token_limits <- list(
+    "gpt-4o" = 4096,
+    "gpt-4-turbo" = 4096,
+    "gpt-3.5-turbo" = 4096,
+    "mixtral" = 4096,
+    "llama-3" = 2048
+  )
+  
+  # Validate 'max_tokens' based on the selected model
+  if (!is.null(max_tokens)) {
+    max_limit <- max_token_limits[[LLM_model]]
+    if (is.null(max_limit)) {
+      stop(paste("Unsupported model:", LLM_model))
+    }
+    if (!is.numeric(max_tokens) || max_tokens <= 0 || max_tokens > max_limit) {
+      stop(paste0("For '", LLM_model, "', 'max_tokens' should be a whole number above 0 and not higher than ", max_limit, "."))
+    }
   }
-  # add a warning message for the permutations
-  if (missing(n_perm) && length(variable_list) > 4) {
-  message("The argument n_perm not specified. Generating all permutations for the remaining variables. This may be slow and costly.")
+  
+  # permutations --------------------------------------------------------------
+
+  # if n_perm is zero or 1
+  if (!missing(n_perm) && n_perm == 0) {
+    stop("n_perm cannot be zero. Please provide a positive integer up to 50 or set to NULL.")
+  }
+  if (missing(n_perm)) {
+    n_perm <- 2 # generate two permutations by default
+      message("The n_perm argument was not specified. The function will proceed using two permutations of the remaining variables.")
+  }
+  # we will cap the number of possible permutations to 50 
+  if (n_perm > 50) {
+    stop(
+      "Requested `n_perm` (", n_perm, ") exceeds maximum possible permutations which is set to 50. Reduce `n_perm` or set to NULL."
+    )
   }
   if (!missing(n_perm) && length(variable_list) == 3) {
     message("Ignoring n_perm: Generating 2 repetitions since there is only 1 remaining variable.")
   }
-  if (!missing(n_perm) && length(variable_list) == 4) {
-    message("Ignoring n_perm: Generating all 2 permutations since there are only 2 remaining variables.")
+  # for no_variable_list > 4, n_perm must be equal to or smaller than variable_list - 2!
+  if (length(variable_list) <= 6 && n_perm > factorial(length(variable_list) - 2)) {
+    stop(
+      "Requested `n_perm` (", n_perm, ") exceeds the maximum possible permutations (", factorial(length(variable_list) - 2), ") for the provided number of variables. Reduce `n_perm` or set to NULL."
+    )
   }
-  
-  if (!is.null(prompt_specs)) {
-    # ensure at least two rows
+  if (!is.null(prompt_specs)) {  # In case the user wants to override the default prompts
     specs <- prompt_specs
     if (length(specs) == 1) specs <- rep(specs, 2)
     
@@ -106,9 +126,9 @@ llmPriorElicit <- function(context,
   } else {
   # Define the prompts within the function (only second and fourth prompts)
   bern_prompts <- data.frame(
-    Function = rep("bernoulli", 2),  # Only 2 prompts now
+    Function = rep("bernoulli", 2),  
     Function.Part = rep("bernoulli", 2),
-    context = c("n", "y"),  # One without context, one with context
+    context = c("n", "y"),  
     Variation.Prompt = rep("Prompt1", 2),
     Variation.Sys.Prompt = rep("Prompt1", 2),
     Prompt = c(
@@ -125,8 +145,6 @@ llmPriorElicit <- function(context,
   logprobs_LLM <- NULL
   logprobs_LLM_prompt <- NULL
   prob_relation_df <- NULL
-  
-  pairs_df <- data.frame(var1 = character(), var2 = character())
   
   # Generate all unique combinations
   pairs_df <- data.frame(var1 = character(), var2 = character())
@@ -147,24 +165,8 @@ llmPriorElicit <- function(context,
     remaining_vars <- setdiff(variable_list, c(var1, var2))
     
     # Generate permutations of remaining variables
-    if (length(remaining_vars) > 1) {
-      max_perms <- factorial(length(remaining_vars))
-      # Force all permutations if length == 2 (ignore n_perm)
-      if (length(remaining_vars) == 2) {
-        perms <- gtools::permutations(length(remaining_vars), length(remaining_vars))
-        remaining_vars_list <- lapply(1:nrow(perms), function(p) remaining_vars[perms[p, ]])
-      } 
-      
-      # Check if n_perm is invalid (> max_perms)
-      else if (!missing(n_perm) && n_perm > max_perms) {
-        stop("n_perm (", n_perm, ") exceeds maximum possible permutations (", max_perms, "). ",
-             "Reduce n_perm or set to NULL for all permutations.")
-      }
       # For length > 2, respect n_perm if specified
-      else if (!missing(n_perm) && n_perm > 0) {
-        max_perms <- factorial(length(remaining_vars))
-        n_perm <- min(n_perm, max_perms)
-        
+      if (length(remaining_vars) > 2) {
         perms <- matrix(nrow = 0, ncol = length(remaining_vars))
         while (nrow(perms) < n_perm) {
           new_perm <- sample(remaining_vars, length(remaining_vars), replace = FALSE)
@@ -174,14 +176,8 @@ llmPriorElicit <- function(context,
         }
         remaining_vars_list <- lapply(1:n_perm, function(p) perms[p, ])
       } 
-      # Default: Generate all permutations (with warning)
-      else {
-        perms <- gtools::permutations(length(remaining_vars), length(remaining_vars))
-        remaining_vars_list <- lapply(1:nrow(perms), function(p) remaining_vars[perms[p, ]])
-      }
-    } 
-    # Handle single-variable case
-    else {
+
+    else {     # Handle single-variable case
       remaining_vars_list <- list(remaining_vars, remaining_vars)  # Repeat twice
     }
     

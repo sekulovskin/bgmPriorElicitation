@@ -8,7 +8,7 @@ source("R/llmPriorElicit.R") # function that takes into account the remaining va
 source("R/llmPriorElicitRelations.R") # function that takes into account the remaining variables
                                     # as well as the decisions on the relations of those variables
 
-source("R/llmPriorElicitSimple.R")  # function that only evaluates the marginal relations without taking
+#source("R/llmPriorElicitSimple.R")  # function that only evaluates the marginal relations without taking
                                   # the remaining variables into account. However, the prompt still explicitly
                                   # mentions that these are conditional associations and that it should take into
                                   # account any possible remaining variables that could influence the association
@@ -23,8 +23,8 @@ source("R/callPriorElicitVariations.R")
 context <- "Depression and Anxiety have been shown to co-occur."
 
 variable_list <- c("anxiety", "depression", 
-                   "hair color", "number of cigarettes smoked",
-                   "ocd")
+                   "hair color", "ocd", "exercise frequency", 
+                   "number of cigarettes smoked", "screen time")
 
 
 # Test 1: llmPriorElicit (1:without context and 2:with context)
@@ -34,7 +34,7 @@ test1.1  <- llmPriorElicit(NULL,
                         LLM_model = "gpt-4o",
                         max_tokens = 2000,
                         update_key = FALSE,
-                        n_perm = 3)
+                        n_perm = 50)
 
 test1.2  <- llmPriorElicit(context,
                          variable_list,
@@ -50,7 +50,7 @@ test2.1  <- llmPriorElicitRelations(NULL,
                                     LLM_model = "gpt-4o",
                                     max_tokens = 2000,
                                     update_key = FALSE,
-                                    n_perm = 20)
+                                    n_perm = 8) # there is no default
 
 test2.2  <- llmPriorElicitRelations(context,
                                     variable_list,
@@ -62,20 +62,20 @@ test2.2  <- llmPriorElicitRelations(context,
 
 # Test 3: llmPriorElicitSimple (1:without context and 2:with context)
 
-test3.1  <- llmPriorElicitSimple(NULL,
-                                 variable_list,
-                                 LLM_model = "gpt-4o",
-                                 max_tokens = 2000,
-                                 update_key = FALSE,
-                                 n_rep = 3) # default is 2
-
-test3.2  <- llmPriorElicitSimple(context,
-                                 variable_list,
-                                 LLM_model = "gpt-4o",
-                                 max_tokens = 2000,
-                                 update_key = FALSE,
-                                 n_rep = 3)
-
+#test3.1  <- llmPriorElicitSimple(NULL,
+#                                 variable_list,
+#                                 LLM_model = "gpt-4o",
+#                                 max_tokens = 2000,
+#                                 update_key = FALSE,
+#                                 n_rep = 3) # default is 2
+#
+#test3.2  <- llmPriorElicitSimple(context,
+#                                 variable_list,
+#                                 LLM_model = "gpt-4o",
+#                                 max_tokens = 2000,
+#                                 update_key = FALSE,
+#                                 n_rep = 3)
+#
 # calculate Beta-binomial parameters
 # These need to be estimated with much more repetitions 
 
@@ -98,31 +98,6 @@ bb3.2
 # Test the prompt variation function: 
 
 # test -------------------------------------------------------------------------
-# llmPriorElicitSimple 
-prompt_bank <- list(
-  list(
-    system = "Act as an expert in graphical models for psychological constructs. You’ll receive pairs of variable names and must decide whether they share a conditional association in a Markov random field after accounting for all other variables. If their relationship endures once every other node is controlled for, output ‘I’ (included edge). If it disappears because the remaining variables explain it away, output ‘E’ (excluded edge). Consider any unobserved or implicit variables. Do not add explanations—only ‘I’ or ‘E’.",
-    user   = "Determine whether a conditional association exists between x and y—that is, whether their relationship persists once all other network variables are taken into account. If the link between x and y remains even after adjusting for the rest, include an edge (‘I’). If the correlation vanishes because the other variables fully account for it, omit the edge (‘E’). Note that you must implicitly consider any additional, unlisted variables within the network. Target pair: '(pairs_df[i, 2])' & '(pairs_df[i, 1])'. Example output: 'Exercise Frequency' & 'Heart Disease': I 'Exercise Frequency' & 'Screen Time': E 'Screen Time' & 'Heart Disease': I \nConsider the following context: '(context)'."
-  ),
-  list(  # these are the original prmpts 
-    system = "You are an expert in using graphical models to study psychological constructs. You will be asked to classify whether there is a conditional relationship between pairs of variables in a Markov random field graphical model, applied to psychological research. You must use your vast prior knowledge of the relationships between the variables to make informed decisions. When presented with two variable names, you should evaluate whether or not there is an edge between those two variables in the graphical model (which reflects a conditional association) between them after taking into account the remaining variables. If there is a conditional association between two variables, then the edge should be categorized as included (by outputting 'I'). If there is no conditional association, then the edge should be categorized as excluded (by outputting 'E'). Therefore, your output should be either 'I' or 'E'! Do not include any additional explanation or other text. Since you must make decisions about conditional associations, be sure to consider any possible remaining variables when making your decision, even though these may or may not explicitly be presented to you.",
-    user   = "Establish whether there is a conditional association between the variables x and y. If a conditional association exists, it means that the variables remain related even after accounting for the relationships between the other variables in the network. However, if the other variables explain away the relation between x and y, then an edge should be absent. You need to take into account possible remaining variables in the network, even though you have not been explicitly provided with those variables. Your output should be either 'I' for included edges, meaning there is a conditional association between the variables, or 'E' for excluded edges, meaning the association is fully explained by the other variables in the network. \n\nTarget pair: '(pairs_df[i, 2])' & '(pairs_df[i, 1])'. \n\nExample output:\n'Exercise Frequency' & 'Heart Disease': I\n'Exercise Frequency' & 'Screen Time': E\n'Screen Time' & 'Heart Disease': I \nTake into account the following context when deciding the type of relationship: '(context)'."
-  )
-)
-
-res1 <- callPriorElicitVariations(
-  target_fun    = llmPriorElicitSimple,
-  prompt_specs  = prompt_bank,
-  context       = "clinical adolescents",
-  variable_list = variable_list,
-  LLM_model     = "gpt-4o",
-  max_tokens    = 1000,
-  update_key    = FALSE,
-  n_rep         = 2
-)
-
-print(res1$summary)
-
 
 # llmPriorElicit
 
@@ -180,3 +155,5 @@ res3 <- callPriorElicitVariations(
 )
 print(res3$summary)
 
+# disable scipen
+options(scipen = 999)
