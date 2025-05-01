@@ -87,7 +87,7 @@ llmPriorElicitRelations <- function(context,
     }
   }
   
-  # permutations --------------------------------------------------------------
+  # permutation checks  --------------------------------------------------------------
   # define all the possible edges 
   pairs_df <- data.frame(var1 = character(), var2 = character())
   for(i in 1:(length(variable_list)-1)) {
@@ -164,7 +164,7 @@ llmPriorElicitRelations <- function(context,
   prob_relation_df <- NULL
   
   # create n_perm permutation of the variable pairs 
-  set.seed(seed) # For reproducibility
+  set.seed(seed) # For reproducibility     #LOOK INTO IF IT REPLICATES THE SAME SAMPLE! 
   perms <- t(replicate(n_perm, sample(1:n_pairs, n_pairs), simplify = TRUE))
 
   # Main evaluation loop - now over permutations

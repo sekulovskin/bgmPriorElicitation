@@ -88,7 +88,7 @@ llmPriorElicit <- function(context,
     message("Ignoring n_perm: Generating 2 repetitions since there is only 1 remaining variable.")
   }
   # for no_variable_list > 4, n_perm must be equal to or smaller than variable_list - 2!
-  if (!missing(n_perm) && n_perm > factorial(length(variable_list) - 2) && length(variable_list) <= 6) {
+  if (!missing(n_perm) && n_perm > factorial(length(variable_list) - 2) && length(variable_list) <= 6  && length(variable_list) > 3) {
     stop(
       "Requested `n_perm` (", n_perm, ") exceeds the maximum possible permutations (", factorial(length(variable_list) - 2), ") for the provided number of variables. Reduce `n_perm` or set to NULL."
     )
@@ -304,7 +304,7 @@ llmPriorElicit <- function(context,
     c_class <- NULL
     for (i in 1:n_pairs) {
       # Determine how many prompts were used (1 if no context, 2 if context provided)
-      n_prompts <- ifelse(is.null(context), 1, 2)
+      n_prompts <- length(all_prob[[i]]) # this should fix  the issue with n_perm = 1 and context provided 
       prob_i <- 0
       prob_e <- 0
       

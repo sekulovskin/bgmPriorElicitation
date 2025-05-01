@@ -32,14 +32,15 @@ test1.1  <- llmPriorElicit(NULL,
                         variable_list,
                         LLM_model = "gpt-4o",
                         max_tokens = 2000,
-                        update_key = FALSE)
+                        update_key = FALSE,
+                        n_perm = 1) # there is no default
 
 test1.2  <- llmPriorElicit(context,
                          variable_list,
                          LLM_model = "gpt-4o",
                          max_tokens = 2000,
                          update_key = FALSE,
-                         n_perm = 3) # there is no default 
+                         n_perm = 1) # there is no default 
 
 # Test 2: llmPriorElicitRelations (1:without context and 2:with context)
 
