@@ -23,8 +23,7 @@ source("R/callPriorElicitVariations.R")
 context <- "Depression and Anxiety have been shown to co-occur."
 
 variable_list <- c("anxiety", "depression", 
-                   "hair color", "ocd", "exercise frequency", 
-                   "number of cigarettes smoked", "screen time")
+                   "hair color")
 
 
 # Test 1: llmPriorElicit (1:without context and 2:with context)
@@ -33,8 +32,7 @@ test1.1  <- llmPriorElicit(NULL,
                         variable_list,
                         LLM_model = "gpt-4o",
                         max_tokens = 2000,
-                        update_key = FALSE,
-                        n_perm = 50)
+                        update_key = FALSE)
 
 test1.2  <- llmPriorElicit(context,
                          variable_list,

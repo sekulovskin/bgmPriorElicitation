@@ -14,7 +14,7 @@
 #'   to be incorporated into the LLM prompt. Defaults to `NULL`.
 #' @param variable_list A character vector of variable names. Must contain at least three variables.
 #' @param LLM_model Character string indicating which LLM to use. Options include: 
-#'   `"gpt-4o"`, `"gpt-4"`, `"gpt-4-turbo"`, `"gpt-3.5-turbo"`, `"mixtral"`, or `"llama-3"`.
+#'   `"gpt-4o"`, `"gpt-4-turbo"`, `"gpt-3.5-turbo"`, `"mixtral"`, or `"llama-3"`.
 #' @param max_tokens Integer specifying the maximum number of tokens to generate. 
 #'   The allowed maximum varies by model: 6000 for GPT-4 variants, 3000 for GPT-3.5.
 #' @param update_key Logical. If `TRUE`, updates the API key used for the LLM call. 

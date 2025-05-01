@@ -9,7 +9,7 @@
 #'
 #' @param context Optional character string. Describes the research context to inform the LLM's evaluation.
 #' @param variable_list A character vector with at least three variable names.
-#' @param LLM_model A character string specifying the model to use. One of: `"gpt-4o"`, `"gpt-4"`, `"gpt-4-turbo"`,
+#' @param LLM_model A character string specifying the model to use. One of: `"gpt-4o"`, `"gpt-4-turbo"`,
 #'   `"gpt-3.5-turbo"`, `"mixtral"`, or `"llama-3"`.
 #' @param max_tokens Integer. The maximum number of tokens the LLM can generate. Maximum depends on the selected model.
 #' @param update_key Logical. If `TRUE`, updates the OpenAI API key once. Default is `FALSE`.
@@ -72,7 +72,7 @@ llmPriorElicit <- function(context,
     "llama-3" = 2048
   )
   
-  # Validate 'max_tokens' based on the selected model
+  # Validate 'max_tokens' based on the selected model -------------------------
   if (!is.null(max_tokens)) {
     max_limit <- max_token_limits[[LLM_model]]
     if (is.null(max_limit)) {
@@ -82,32 +82,35 @@ llmPriorElicit <- function(context,
       stop(paste0("For '", LLM_model, "', 'max_tokens' should be a whole number above 0 and not higher than ", max_limit, "."))
     }
   }
-  
-  # permutations --------------------------------------------------------------
-
-  # if n_perm is zero or 1
+  # permutation checks ---------------------------------------------------------
+  # if n_perm is missing and there is only 1 variables left, set it to 2
+  if (!missing(n_perm) && n_perm > 2 &&  length(variable_list) == 3) {
+    message("Ignoring n_perm: Generating 2 repetitions since there is only 1 remaining variable.")
+  }
+  # for no_variable_list > 4, n_perm must be equal to or smaller than variable_list - 2!
+  if (!missing(n_perm) && n_perm > factorial(length(variable_list) - 2) && length(variable_list) <= 6) {
+    stop(
+      "Requested `n_perm` (", n_perm, ") exceeds the maximum possible permutations (", factorial(length(variable_list) - 2), ") for the provided number of variables. Reduce `n_perm` or set to NULL."
+    )
+  }
+  # if n_perm is zero 
   if (!missing(n_perm) && n_perm == 0) {
     stop("n_perm cannot be zero. Please provide a positive integer up to 50 or set to NULL.")
   }
+  # if n_perm is missing set it to 2 
   if (missing(n_perm)) {
     n_perm <- 2 # generate two permutations by default
       message("The n_perm argument was not specified. The function will proceed using two permutations of the remaining variables.")
   }
-  # we will cap the number of possible permutations to 50 
+  # cap the number of possible permutations to 50 
   if (n_perm > 50) {
     stop(
       "Requested `n_perm` (", n_perm, ") exceeds maximum possible permutations which is set to 50. Reduce `n_perm` or set to NULL."
     )
   }
-  if (!missing(n_perm) && length(variable_list) == 3) {
-    message("Ignoring n_perm: Generating 2 repetitions since there is only 1 remaining variable.")
-  }
-  # for no_variable_list > 4, n_perm must be equal to or smaller than variable_list - 2!
-  if (length(variable_list) <= 6 && n_perm > factorial(length(variable_list) - 2)) {
-    stop(
-      "Requested `n_perm` (", n_perm, ") exceeds the maximum possible permutations (", factorial(length(variable_list) - 2), ") for the provided number of variables. Reduce `n_perm` or set to NULL."
-    )
-  }
+ 
+
+# Prompts -------------------------------------------------------------------
   if (!is.null(prompt_specs)) {  # In case the user wants to override the default prompts
     specs <- prompt_specs
     if (length(specs) == 1) specs <- rep(specs, 2)
@@ -166,8 +169,8 @@ llmPriorElicit <- function(context,
     remaining_vars <- setdiff(variable_list, c(var1, var2))
     
     # Generate permutations of remaining variables
-      # For length > 2, respect n_perm if specified
-      if (length(remaining_vars) > 2) {
+      # For length > 2, respect the specified n_perm 
+      if (length(remaining_vars) >= 2) {
         perms <- matrix(nrow = 0, ncol = length(remaining_vars))
         while (nrow(perms) < n_perm) {
           new_perm <- sample(remaining_vars, length(remaining_vars), replace = FALSE)
@@ -177,8 +180,13 @@ llmPriorElicit <- function(context,
         }
         remaining_vars_list <- lapply(1:n_perm, function(p) perms[p, ])
       } 
+    # 
+    else if (length(remaining_vars) == 1 && n_perm == 1){
+      # If only one remaining variable, and n_perm is 1 
+      remaining_vars_list <- list(remaining_vars)
+    }
 
-    else {     # Handle single-variable case
+    else {     # Otherwise just repeat the single variable twice 
       remaining_vars_list <- list(remaining_vars, remaining_vars)  # Repeat twice
     }
     
