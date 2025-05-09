@@ -164,8 +164,9 @@ llmPriorElicitRelations <- function(context,
   prob_relation_df <- NULL
   
   # create n_perm permutation of the variable pairs 
-  set.seed(seed) # For reproducibility     #LOOK INTO IF IT REPLICATES THE SAME SAMPLE! 
-  perms <- t(replicate(n_perm, sample(1:n_pairs, n_pairs), simplify = TRUE))
+  set.seed(seed) # For reproducibility      
+  perms <- t(replicate(n_perm, sample(1:n_pairs, n_pairs, replace = FALSE), 
+                       simplify = TRUE))
 
   # Main evaluation loop - now over permutations
   for (perm_idx in 1:n_perm) {
